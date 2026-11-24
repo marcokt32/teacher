@@ -1,0 +1,184 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Papel {
+  ADMIN
+  PROFESSOR
+  ALUNO
+}
+
+enum SituacaoMatricula {
+  ATIVA
+  PAUSADA
+  CANCELADA
+}
+
+enum SituacaoPagamento {
+  PENDENTE
+  PAGO
+  ATRASADO
+  CANCELADO
+}
+
+enum ProvedorPagamento {
+  MANUAL
+  ASAAS
+  MERCADO_PAGO
+}
+
+enum TipoAula {
+  AO_VIVO
+  GRAVADA
+}
+
+model Usuario {
+  id           String   @id @default(cuid())
+  nome         String
+  email        String   @unique
+  senhaHash    String?
+  telefone     String?
+  papel        Papel    @default(ALUNO)
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  cursosMinistrados Curso[]     @relation("ProfessorDoCurso")
+  turmasMinistradas Turma[]     @relation("ProfessorDaTurma")
+  matriculas        Matricula[]
+  materiaisEnviados Material[]
+
+  @@map("usuarios")
+}
+
+model Curso {
+  id            String   @id @default(cuid())
+  nome          String
+  slug          String   @unique
+  descricao     String?
+  nivel         String?
+  precoCentavos Int      @default(0)
+  ativo         Boolean  @default(true)
+  criadoEm      DateTime @default(now())
+  atualizadoEm  DateTime @updatedAt
+
+  professorId String
+  professor   Usuario @relation("ProfessorDoCurso", fields: [professorId], references: [id])
+
+  turmas     Turma[]
+  aulas      Aula[]
+  materiais  Material[]
+  matriculas Matricula[]
+
+  @@map("cursos")
+}
+
+model Turma {
+  id       String   @id @default(cuid())
+  nome     String
+  horario  String?
+  vagas    Int?
+  ativa    Boolean  @default(true)
+  criadoEm DateTime @default(now())
+
+  cursoId String
+  curso   Curso  @relation(fields: [cursoId], references: [id])
+
+  professorId String?
+  professor   Usuario? @relation("ProfessorDaTurma", fields: [professorId], references: [id])
+
+  matriculas Matricula[]
+  aulas      Aula[]
+
+  @@map("turmas")
+}
+
+model Matricula {
+  id        String            @id @default(cuid())
+  situacao  SituacaoMatricula @default(ATIVA)
+  iniciaEm  DateTime          @default(now())
+  terminaEm DateTime?
+  criadoEm  DateTime          @default(now())
+
+  alunoId String
+  aluno   Usuario @relation(fields: [alunoId], references: [id])
+
+  cursoId String
+  curso   Curso  @relation(fields: [cursoId], references: [id])
+
+  turmaId String?
+  turma   Turma?  @relation(fields: [turmaId], references: [id])
+
+  pagamentos Pagamento[]
+
+  @@unique([alunoId, cursoId])
+  @@map("matriculas")
+}
+
+model Aula {
+  id        String    @id @default(cuid())
+  titulo    String
+  descricao String?
+  ordem     Int       @default(0)
+  tipo      TipoAula  @default(GRAVADA)
+  iniciaEm  DateTime?
+  link      String?
+  publicada Boolean   @default(false)
+  criadoEm  DateTime  @default(now())
+
+  cursoId String
+  curso   Curso  @relation(fields: [cursoId], references: [id])
+
+  turmaId String?
+  turma   Turma?  @relation(fields: [turmaId], references: [id])
+
+  materiais Material[]
+
+  @@index([cursoId, ordem])
+  @@map("aulas")
+}
+
+model Material {
+  id           String   @id @default(cuid())
+  nome         String
+  tipoMime     String
+  tamanhoBytes Int
+  chaveArquivo String
+  criadoEm     DateTime @default(now())
+
+  cursoId String
+  curso   Curso  @relation(fields: [cursoId], references: [id])
+
+  aulaId String?
+  aula   Aula?   @relation(fields: [aulaId], references: [id])
+
+  enviadoPorId String
+  enviadoPor   Usuario @relation(fields: [enviadoPorId], references: [id])
+
+  @@map("materiais")
+}
+
+model Pagamento {
+  id            String            @id @default(cuid())
+  valorCentavos Int
+  vencimento    DateTime
+  pagoEm        DateTime?
+  situacao      SituacaoPagamento @default(PENDENTE)
+  provedor      ProvedorPagamento @default(MANUAL)
+  idExterno     String?
+  linkCobranca  String?
+  criadoEm      DateTime          @default(now())
+  atualizadoEm  DateTime          @updatedAt
+
+  matriculaId String
+  matricula   Matricula @relation(fields: [matriculaId], references: [id])
+
+  @@unique([provedor, idExterno])
+  @@index([situacao, vencimento])
+  @@map("pagamentos")
+}
